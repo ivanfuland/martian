@@ -227,6 +227,67 @@ const options = {
 };
 ```
 
+### Setting heading colors
+
+You can set colors for different heading levels using the `headingColors` option:
+
+```ts
+const options = {
+  headingColors: {
+    h1: 'red',    // 一级标题设置为红色
+    h2: 'blue',   // 二级标题设置为蓝色
+    h3: 'green',  // 三级标题设置为绿色
+    h4: 'yellow', // 四级标题设置为黄色
+    h5: 'purple', // 五级标题设置为紫色
+    h6: 'gray',   // 六级标题设置为灰色
+  },
+};
+
+markdownToBlocks('# Heading 1\n## Heading 2\n### Heading 3', options);
+```
+
+Available colors: 
+- Standard colors: `default`, `gray`, `brown`, `orange`, `yellow`, `green`, `blue`, `purple`, `pink`, `red`
+- Background colors: `gray_background`, `brown_background`, `orange_background`, `yellow_background`, `green_background`, `blue_background`, `purple_background`, `pink_background`, `red_background`
+
+#### Using hex color codes
+
+You can also use hex color codes, which will be automatically mapped to the closest Notion color:
+
+```ts
+const options = {
+  headingColors: {
+    h1: '#FF6F61', // 会映射到 red
+    h2: '#F8B400', // 会映射到 yellow
+    h3: '#4DB8FF', // 会映射到 blue
+  },
+};
+
+markdownToBlocks('# Heading 1\n## Heading 2\n### Heading 3', options);
+```
+
+#### Using default heading colors
+
+You can enable default heading colors based on a predefined color scheme:
+
+```ts
+const options = {
+  useDefaultHeadingColors: true,
+};
+
+markdownToBlocks('# Heading 1\n## Heading 2\n### Heading 3', options);
+```
+
+Default colors:
+- h1: #FF6F61 (maps to red)
+- h2: #F8B400 (maps to yellow)
+- h3: #4DB8FF (maps to blue)
+- h4: #A3BE8C (maps to green)
+- h5: #B48EAD (maps to purple)
+- h6: #5E81AC (maps to blue)
+
+Note: In Notion, heading levels 4-6 are all rendered as heading level 3, but the colors will still be applied according to the original heading level.
+
 Default behavior:
 
 ```ts
@@ -345,4 +406,3 @@ Error: Unsupported markdown element: {"type":"heading","depth":1,"children":[{"t
 Built with 💙 by the team behind [Fabric](https://tryfabric.com).
 
 <img src="https://static.scarf.sh/a.png?x-pxid=79ae4e0a-7e48-4965-8a83-808c009aa47a" />
-

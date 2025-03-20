@@ -145,8 +145,169 @@ function parseBlockquote(
   return notion.blockquote([], children);
 }
 
-function parseHeading(element: md.Heading): notion.Block {
+// 将十六进制颜色代码映射到最接近的 Notion 颜色
+function mapHexToNotionColor(hexColor: string): string {
+  // 如果输入的颜色已经是 Notion 颜色名称，直接返回
+  const validNotionColors = [
+    'default',
+    'gray',
+    'brown',
+    'orange',
+    'yellow',
+    'green',
+    'blue',
+    'purple',
+    'pink',
+    'red',
+    'gray_background',
+    'brown_background',
+    'orange_background',
+    'yellow_background',
+    'green_background',
+    'blue_background',
+    'purple_background',
+    'pink_background',
+    'red_background',
+  ];
+
+  if (validNotionColors.includes(hexColor)) {
+    return hexColor;
+  }
+
+  // 预定义的颜色映射
+  const predefinedMappings: Record<string, string> = {
+    '#FF6F61': 'red', // h1
+    '#F8B400': 'yellow', // h2
+    '#4DB8FF': 'blue', // h3
+    '#A3BE8C': 'green', // h4
+    '#B48EAD': 'purple', // h5
+    '#5E81AC': 'blue', // h6
+  };
+
+  // 检查是否有预定义的映射
+  if (predefinedMappings[hexColor]) {
+    return predefinedMappings[hexColor];
+  }
+
+  // Notion 支持的颜色及其十六进制值
+  const notionColors: Record<string, string> = {
+    default: '#37352F',
+    gray: '#9B9A97',
+    brown: '#64473A',
+    orange: '#D9730D',
+    yellow: '#DFAB01',
+    green: '#0F7B6C',
+    blue: '#0B6E99',
+    purple: '#6940A5',
+    pink: '#AD1A72',
+    red: '#E03E3E',
+  };
+
+  // 将十六进制颜色转换为 RGB
+  const r = parseInt(hexColor.substring(1, 3), 16);
+  const g = parseInt(hexColor.substring(3, 5), 16);
+  const b = parseInt(hexColor.substring(5, 7), 16);
+
+  // 计算与 Notion 颜色的距离，找到最接近的颜色
+  let minDistance = Infinity;
+  let closestColor = 'default';
+
+  for (const [colorName, colorHex] of Object.entries(notionColors)) {
+    const nr = parseInt(colorHex.substring(1, 3), 16);
+    const ng = parseInt(colorHex.substring(3, 5), 16);
+    const nb = parseInt(colorHex.substring(5, 7), 16);
+
+    // 使用欧几里得距离计算颜色相似度
+    const distance = Math.sqrt(
+      Math.pow(r - nr, 2) + Math.pow(g - ng, 2) + Math.pow(b - nb, 2)
+    );
+
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestColor = colorName;
+    }
+  }
+
+  return closestColor;
+}
+
+// 获取标题的默认颜色
+function getDefaultHeadingColor(depth: number): string {
+  // 默认的标题颜色（十六进制）
+  const defaultColors: Record<string, string> = {
+    '1': '#FF6F61', // h1: 红色
+    '2': '#F8B400', // h2: 黄色
+    '3': '#4DB8FF', // h3: 蓝色
+    '4': '#A3BE8C', // h4: 绿色
+    '5': '#B48EAD', // h5: 紫色
+    '6': '#5E81AC', // h6: 深蓝色
+  };
+
+  // 将十六进制颜色映射到 Notion 颜色
+  const hexColor = defaultColors[depth.toString()] || defaultColors['1'];
+  return mapHexToNotionColor(hexColor);
+}
+
+function parseHeading(
+  element: md.Heading,
+  options: BlocksOptions
+): notion.Block {
   const text = element.children.flatMap(child => parseInline(child));
+
+  // 应用标题颜色设置
+  let color: string | undefined;
+
+  // 如果设置了 headingColors，尝试获取对应的颜色
+  if (options.headingColors) {
+    const colorKey = `h${element.depth}` as keyof typeof options.headingColors;
+    color = options.headingColors[colorKey];
+  }
+
+  // 如果没有指定颜色，但启用了默认颜色，使用默认颜色
+  if (!color && options.useDefaultHeadingColors) {
+    color = getDefaultHeadingColor(element.depth);
+  }
+
+  if (color) {
+    // 有效的 Notion 颜色值
+    const validColors = [
+      'default',
+      'gray',
+      'brown',
+      'orange',
+      'yellow',
+      'green',
+      'blue',
+      'purple',
+      'pink',
+      'red',
+      'gray_background',
+      'brown_background',
+      'orange_background',
+      'yellow_background',
+      'green_background',
+      'blue_background',
+      'purple_background',
+      'pink_background',
+      'red_background',
+    ];
+
+    // 如果是十六进制颜色，转换为 Notion 颜色
+    let notionColor = color;
+    if (color.startsWith('#')) {
+      notionColor = mapHexToNotionColor(color);
+    }
+
+    // 检查颜色值是否有效
+    if (validColors.includes(notionColor)) {
+      // 为所有 RichText 元素设置颜色
+      text.forEach(rt => {
+        if (rt.annotations) {
+          rt.annotations.color = notionColor as any; // 使用 any 类型暂时绕过类型检查
+        }
+      });
+    }
+  }
 
   switch (element.depth) {
     case 1:
@@ -221,7 +382,7 @@ function parseNode(
 ): notion.Block[] {
   switch (node.type) {
     case 'heading':
-      return [parseHeading(node)];
+      return [parseHeading(node, options)];
 
     case 'paragraph':
       return parseParagraph(node, options);
@@ -271,16 +432,50 @@ export interface CommonOptions {
 export interface BlocksOptions extends CommonOptions {
   /** Whether to render invalid images as text */
   strictImageUrls?: boolean;
+  /**
+   * 设置标题颜色
+   * 可用颜色: default, gray, brown, orange, yellow, green, blue, purple, pink, red
+   * 以及带背景的颜色: gray_background, brown_background, orange_background,
+   * yellow_background, green_background, blue_background, purple_background,
+   * pink_background, red_background
+   *
+   * 也可以使用十六进制颜色代码，会自动映射到最接近的 Notion 颜色
+   */
+  headingColors?: {
+    h1?: string;
+    h2?: string;
+    h3?: string;
+    h4?: string;
+    h5?: string;
+    h6?: string;
+  };
+  /**
+   * 是否使用默认的标题颜色
+   * 默认颜色:
+   * h1: #FF6F61 (红色)
+   * h2: #F8B400 (黄色)
+   * h3: #4DB8FF (蓝色)
+   * h4: #A3BE8C (绿色)
+   * h5: #B48EAD (紫色)
+   * h6: #5E81AC (深蓝色)
+   */
+  useDefaultHeadingColors?: boolean;
 }
 
 export function parseBlocks(
   root: md.Root,
   options?: BlocksOptions
 ): notion.Block[] {
-  const parsed = root.children.flatMap(item => parseNode(item, options || {}));
+  // 确保 options 对象存在
+  const opts: BlocksOptions = options || {};
 
-  const truncate = !!(options?.notionLimits?.truncate ?? true),
-    limitCallback = options?.notionLimits?.onError ?? (() => {});
+  // 打印 options 对象，用于调试
+  console.log('Options:', JSON.stringify(opts, null, 2));
+
+  const parsed = root.children.flatMap(item => parseNode(item, opts));
+
+  const truncate = !!(opts.notionLimits?.truncate ?? true),
+    limitCallback = opts.notionLimits?.onError ?? (() => {});
 
   if (parsed.length > LIMITS.PAYLOAD_BLOCKS)
     limitCallback(
